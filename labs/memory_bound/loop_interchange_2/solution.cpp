@@ -4,6 +4,8 @@
 #include <fstream>
 #include <ios>
 
+#include <vector>
+
 // Applies Gaussian blur in independent vertical lines
 static void filterVertically(uint8_t *output, const uint8_t *input,
                              const int width, const int height,
@@ -11,9 +13,9 @@ static void filterVertically(uint8_t *output, const uint8_t *input,
                              const int shift) {
   const int rounding = 1 << (shift - 1);
 
-  for (int c = 0; c < width; c++) {
-    // Top part of line, partial kernel
-    for (int r = 0; r < std::min(radius, height); r++) {
+  // Top part of line, partial kernel
+  for (int r = 0; r < std::min(radius, height); r++) {
+    for (int c = 0; c < width; c++) {
       // Accumulation
       int dot = 0;
       int sum = 0;
@@ -28,22 +30,29 @@ static void filterVertically(uint8_t *output, const uint8_t *input,
       int value = static_cast<int>(dot / static_cast<float>(sum) + 0.5f);
       output[r * width + c] = static_cast<uint8_t>(value);
     }
+  }
 
-    // Middle part of computations with full kernel
-    for (int r = radius; r < height - radius; r++) {
-      // Accumulation
-      int dot = 0;
-      for (int i = 0; i < radius + 1 + radius; i++) {
-        dot += input[(r - radius + i) * width + c] * kernel[i];
-      }
+  std::vector<int> columnDots = std::vector(width, 0);
+  for (int row = radius; row < height - radius; row++)
+  {
+    std::fill(columnDots.begin(), columnDots.end(), rounding);
+    for (int i = 0; i < radius + 1 + radius; i++) 
+    {
+      const int weight   = kernel[i];
+      const int rowIndex = (row - radius + i) * width;
 
-      // Fast shift instead of division
-      int value = (dot + rounding) >> shift;
-      output[r * width + c] = static_cast<uint8_t>(value);
+      for (int col = 0; col < width; col++)
+        columnDots[col] += input[rowIndex + col] * weight;
     }
 
-    // Bottom part of line, partial kernel
-    for (int r = std::max(radius, height - radius); r < height; r++) {
+    const int rowIndex = row * width;
+    for (int col = 0; col < width; col++)
+      output[rowIndex + col] = static_cast<uint8_t>((columnDots[col]) >> shift);
+  }
+
+  // Bottom part of line, partial kernel
+  for (int r = std::max(radius, height - radius); r < height; r++) {
+    for (int c = 0; c < width; c++) {
       // Accumulation
       int dot = 0;
       int sum = 0;
@@ -67,8 +76,13 @@ static void filterHorizontally(uint8_t *output, const uint8_t *input,
                                const int *kernel, const int radius,
                                const int shift) {
   const int rounding = 1 << (shift - 1);
+  const int chunkSize = radius + 1 + radius;
 
-  for (int r = 0; r < height; r++) {
+  for (int r = 0; r < height; r++) 
+  {
+    const int rowStartIndex = r * width;
+    const uint8_t* const rowPtr = input + rowStartIndex;
+
     // Left part of line, partial kernel
     for (int c = 0; c < std::min(radius, width); c++) {
       // Accumulation
@@ -77,26 +91,27 @@ static void filterHorizontally(uint8_t *output, const uint8_t *input,
       auto p = &kernel[radius - c];
       for (int x = 0; x <= std::min(c + radius, width - 1); x++) {
         int weight = *p++;
-        dot += input[r * width + x] * weight;
+        dot += input[rowStartIndex + x] * weight;
         sum += weight;
       }
 
       // Normalization
       int value = static_cast<int>(dot / static_cast<float>(sum) + 0.5f);
-      output[r * width + c] = static_cast<uint8_t>(value);
+      output[rowStartIndex + c] = static_cast<uint8_t>(value);
     }
 
     // Middle part of computations with full kernel
-    for (int c = radius; c < width - radius; c++) {
+    for (int c = radius; c < width - radius; c++) 
+    {
       // Accumulation
+      const uint8_t* const chuckStart = input + rowStartIndex + c - radius;
       int dot = 0;
-      for (int i = 0; i < radius + 1 + radius; i++) {
-        dot += input[r * width + c - radius + i] * kernel[i];
+      for (int i = 0; i < chunkSize; i++) {
+        dot += chuckStart[i] * kernel[i];
       }
 
       // Fast shift instead of division
-      int value = (dot + rounding) >> shift;
-      output[r * width + c] = static_cast<uint8_t>(value);
+      output[rowStartIndex + c] = static_cast<uint8_t>((dot + rounding) >> shift);
     }
 
     // Right part of line, partial kernel

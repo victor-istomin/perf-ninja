@@ -32,7 +32,7 @@ static void bench1(benchmark::State &state) {
 }
 
 // Register the function as a benchmark
-BENCHMARK(bench1);
+BENCHMARK(bench1)->Unit(::benchmark::TimeUnit::kMillisecond)->Iterations(10);
 
 // Run the benchmark
 int main(int argc, char **argv) {
