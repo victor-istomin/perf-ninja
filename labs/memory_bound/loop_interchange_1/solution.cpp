@@ -21,16 +21,21 @@ void identity(Matrix &result) {
     result[i][i] = 1;
   }
 }
-
 // Multiply two square matrices
 void multiply(Matrix &result, const Matrix &a, const Matrix &b) {
-  zero(result);
+  Matrix bT;
+  for (int i = 0; i < N; i++)
+    for (int j = 0; j < N; j++)
+      bT[j][i] = b[i][j];
 
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
+      float sum = 0;
       for (int k = 0; k < N; k++) {
-        result[i][j] += a[i][k] * b[k][j];
+        sum += a[i][k] * bT[j][k];
       }
+
+      result[i][j] = sum;
     }
   }
 }
